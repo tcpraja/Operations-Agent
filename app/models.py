@@ -52,29 +52,12 @@ class IncidentRequest(BaseModel):
 
 
 class IncidentActionPlan(BaseModel):
-
     summary: str
-
-    severity: Literal[
-        "LOW",
-        "MEDIUM",
-        "HIGH",
-        "CRITICAL",
-    ]
-
-    estimated_loss_usd: (
-        float | None
-    ) = None
-
+    severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    estimated_loss_usd: float
     likely_causes: list[str]
-
     immediate_actions: list[str]
-
     verification_checks: list[str]
-
     escalation_required: bool
-
-    confidence: float = Field(
-        ge=0,
-        le=1,
-    )
+    confidence: float
+    knowledge_sources: list[str] = Field(default_factory=list)

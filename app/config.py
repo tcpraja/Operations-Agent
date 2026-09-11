@@ -95,7 +95,7 @@ class Settings:
 
     AGENT_TIMEOUT_SECONDS = get_int(
         "AGENT_TIMEOUT_SECONDS",
-        90,
+        30,
     )
 
     MAX_AGENT_ATTEMPTS = get_int(

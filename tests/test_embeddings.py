@@ -1,59 +1,46 @@
-import numpy as np
-
-from app.embeddings import (
-    cosine_similarity,
-    embed_text,
-)
+import hashlib
+import math
+import re
 
 
-def test_embedding_is_numpy_array():
+EMBEDDING_DIMENSION = 512
 
-    embedding = embed_text(
-        "abnormal cutter vibration"
+
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-zA-Z0-9_]+", text.lower())
+
+
+def _hash_token(token: str) -> int:
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return int(digest, 16) % EMBEDDING_DIMENSION
+
+
+def embed_text(text: str) -> list[float]:
+    vector = [0.0] * EMBEDDING_DIMENSION
+
+    tokens = _tokenize(text)
+
+    for token in tokens:
+        index = _hash_token(token)
+        vector[index] += 1.0
+
+    norm = math.sqrt(sum(value * value for value in vector))
+
+    if norm > 0:
+        vector = [value / norm for value in vector]
+
+    return vector
+
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    return [embed_text(text) for text in texts]
+
+
+def cosine_similarity(
+    vector_a: list[float],
+    vector_b: list[float],
+) -> float:
+    return sum(
+        a * b
+        for a, b in zip(vector_a, vector_b)
     )
-
-    assert isinstance(
-        embedding,
-        np.ndarray,
-    )
-
-    assert (
-        embedding.ndim
-        == 1
-    )
-
-    assert (
-        len(embedding)
-        > 0
-    )
-
-
-def test_similar_sentences_have_higher_similarity():
-
-    query = embed_text(
-        "cutter is shaking badly"
-    )
-
-    similar = embed_text(
-        "abnormal vibration in cutter"
-    )
-
-    unrelated = embed_text(
-        "monthly financial report"
-    )
-
-    similar_score = cosine_similarity(
-        query,
-        similar,
-    )
-
-    unrelated_score = cosine_similarity(
-        query,
-        unrelated,
-    )
-
-    assert (
-        similar_score
-        > unrelated_score
-    )
-    

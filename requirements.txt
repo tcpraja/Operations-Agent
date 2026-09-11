@@ -4,7 +4,4 @@ uvicorn[standard]
 pydantic
 python-dotenv
 httpx
-sentence-transformers
 numpy
-streamlit
-requests

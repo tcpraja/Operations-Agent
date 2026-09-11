@@ -1,0 +1,40 @@
+PET CUTTER TROUBLESHOOTING KNOWLEDGE
+
+Equipment:
+PET Pellet Cutter
+
+Condition:
+Repeated cutter trips with abnormal vibration.
+
+Safety:
+Keep the cutter stopped if repeated trips are accompanied
+by abnormal vibration until maintenance or engineering
+has completed a safe inspection.
+
+Initial checks:
+1. Review recent cutter trip alarms.
+2. Inspect cutter blade condition.
+3. Check cutter bearing temperature.
+4. Measure cutter vibration.
+5. Check cutter alignment.
+6. Check motor current.
+7. Inspect for loose mechanical components.
+
+Possible causes requiring verification:
+- Blade wear or damage.
+- Cutter misalignment.
+- Bearing degradation.
+- Mechanical looseness.
+- Material buildup.
+- Motor overload.
+- Electrical or control-system fault.
+
+Important:
+These possible causes are hypotheses only.
+Do not classify them as confirmed failures without
+inspection or measurement evidence.
+
+Return to service:
+The cutter should only be returned to normal operation
+after the identified condition has been inspected,
+corrected where required, and safe operation verified.

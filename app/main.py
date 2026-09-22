@@ -760,48 +760,62 @@ async def _chat_core(
     )
     messages.append({"role": "user", "content": request.message.strip()})
 
-    try:
-        if settings.AI_PROVIDER == "ollama":
-            async with httpx.AsyncClient(
-                timeout=settings.AGENT_TIMEOUT_SECONDS
-            ) as client:
-                response = await client.post(
-                    settings.AI_BASE_URL.removesuffix("/v1")
-                    + "/api/chat",
-                    json={
-                        "model": settings.AI_MODEL,
-                        "messages": messages,
-                        "format": ChatDecision.model_json_schema(),
-                        "think": False,
-                        "stream": False,
-                        "options": {
-                            "temperature": 0.2,
-                            "num_predict": 1024,
+    decision = None
+    last_error = None
+    for attempt in range(1, settings.MAX_AGENT_ATTEMPTS + 1):
+        try:
+            if settings.AI_PROVIDER == "ollama":
+                async with httpx.AsyncClient(
+                    timeout=settings.AGENT_TIMEOUT_SECONDS
+                ) as client:
+                    response = await client.post(
+                        settings.AI_BASE_URL.removesuffix("/v1")
+                        + "/api/chat",
+                        json={
+                            "model": settings.AI_MODEL,
+                            "messages": messages,
+                            "format": ChatDecision.model_json_schema(),
+                            "think": False,
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.2,
+                                "num_predict": 1024,
+                            },
+                        },
+                    )
+                    response.raise_for_status()
+                    decision = ChatDecision.model_validate_json(
+                        response.json()["message"]["content"]
+                    )
+            else:
+                response = await openrouter_client.chat.completions.create(
+                    model=settings.AI_MODEL,
+                    messages=messages,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "chat_decision",
+                            "schema": ChatDecision.model_json_schema(),
                         },
                     },
+                    max_tokens=1024,
                 )
-                response.raise_for_status()
                 decision = ChatDecision.model_validate_json(
-                    response.json()["message"]["content"]
+                    response.choices[0].message.content or "{}"
                 )
-        else:
-            response = await openrouter_client.chat.completions.create(
-                model=settings.AI_MODEL,
-                messages=messages,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "chat_decision",
-                        "schema": ChatDecision.model_json_schema(),
-                    },
-                },
-                max_tokens=1024,
+            break
+        except Exception as error:
+            last_error = error
+            logger.warning(
+                f"chat_model_attempt_failed "
+                f"attempt={attempt} "
+                f"error={error}"
             )
-            decision = ChatDecision.model_validate_json(
-                response.choices[0].message.content or "{}"
-            )
-    except Exception:
-        logger.exception("chat_model_failure")
+            if attempt < settings.MAX_AGENT_ATTEMPTS:
+                await asyncio.sleep(settings.RETRY_DELAY_SECONDS)
+
+    if decision is None:
+        logger.error(f"chat_model_failure error={last_error}")
         raise HTTPException(
             status_code=502,
             detail="Chat model temporarily unavailable.",

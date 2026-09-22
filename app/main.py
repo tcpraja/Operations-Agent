@@ -667,7 +667,13 @@ async def _chat_core(
             "web_image for a request about a video, YouTube, or a video "
             "link — no tool can fetch or verify a specific video. For "
             "those, use reply and say plainly that you cannot provide or "
-            "verify a specific video link. "
+            "verify a specific video link. When you choose web_image, set "
+            "web_image_query to a specific, unambiguous English search "
+            "phrase for the equipment plus 'industrial equipment' — "
+            "always expand an abbreviation or acronym to its full name "
+            "first (e.g. 'CSTR' becomes 'continuous stirred-tank reactor "
+            "industrial equipment'), since searching the bare acronym "
+            "returns unrelated results. "
             "Use web_cost whenever the user asks about the cost, price, "
             "or a quote for equipment or spare parts (including a "
             "follow-up that only names a part after a cost question was "
@@ -1132,6 +1138,8 @@ async def _chat_core(
             search_terms = "pellet cutter pelletizer industrial equipment"
         elif PUMP_PATTERN.search(latest):
             search_terms = "polymer gear pump industrial equipment"
+        elif decision.web_image_query and decision.web_image_query.strip():
+            search_terms = decision.web_image_query.strip()
         else:
             search_terms = f"{equipment_term} industrial equipment"
 

@@ -109,6 +109,7 @@ class ChatDecision(BaseModel):
     ]
     reply: str
     incident: str | None = None
+    web_image_query: str | None = None
     document_format: Literal["docx", "pptx", "xlsx", "pdf"] | None = None
     document_title: str | None = None
     document_section_headings: list[str] = Field(default_factory=list)

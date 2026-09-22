@@ -194,17 +194,14 @@ if st.session_state.loaded_session_id != st.session_state.session_id:
 st.markdown(
     """
     <style>
-    /* Streamlit wraps a keyed container in an extra wrapper div;
-       that outer wrapper is what actually needs to stick, not just
-       our inner div, or the header scrolls away with the page. */
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div.st-key-sticky_header),
+    /* Not position:sticky: that relied on Streamlit's undocumented
+       internal wrapper markup (stVerticalBlockBorderWrapper) via a
+       :has() selector, which broke — the banner would disappear
+       while scrolling because Streamlit's DOM for that wrapper
+       doesn't stay stable across reruns/scroll. A plain top banner
+       is less fancy but doesn't silently vanish. */
     div.st-key-sticky_header {
-        position: sticky;
-        top: 0;
-        z-index: 999;
         background-color: #002E61;
-    }
-    div.st-key-sticky_header {
         padding-top: 0.5rem;
         padding-bottom: 0.5rem;
         padding-left: 1rem;
@@ -925,14 +922,17 @@ if chat_submission:
 
         for attached_file in attached_files:
 
+            upload_message = (
+                f"Uploaded {attached_file.name}"
+                + (f" — {cleaned_message}" if cleaned_message else "")
+            )
             st.session_state.messages.append({
                 "role": "user",
                 "type": "text",
-                "content": (
-                    f"Uploaded {attached_file.name}"
-                    + (f" — {cleaned_message}" if cleaned_message else "")
-                ),
+                "content": upload_message,
             })
+            with st.chat_message("user"):
+                st.markdown(upload_message)
 
             with st.spinner(f"Processing {attached_file.name}..."):
                 upload_result = call_upload_api(attached_file, cleaned_message)
@@ -963,6 +963,8 @@ if chat_submission and not chat_submission.files and chat_submission.text.strip(
             "content": cleaned_message,
         }
     )
+    with st.chat_message("user"):
+        st.markdown(cleaned_message)
 
     history = flatten_history(st.session_state.messages[:-1])
 

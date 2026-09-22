@@ -483,6 +483,8 @@ async def health():
         ),
         "version": settings.APP_VERSION,
         "environment": settings.APP_ENV,
+        "ai_provider": settings.AI_PROVIDER,
+        "ai_model": settings.AI_MODEL,
     }
 
 

@@ -194,13 +194,10 @@ if st.session_state.loaded_session_id != st.session_state.session_id:
 st.markdown(
     """
     <style>
-    /* Not position:sticky: that relied on Streamlit's undocumented
-       internal wrapper markup (stVerticalBlockBorderWrapper) via a
-       :has() selector, which broke — the banner would disappear
-       while scrolling because Streamlit's DOM for that wrapper
-       doesn't stay stable across reruns/scroll. A plain top banner
-       is less fancy but doesn't silently vanish. */
     div.st-key-sticky_header {
+        position: sticky;
+        top: 0;
+        z-index: 999;
         background-color: #002E61;
         padding-top: 0.5rem;
         padding-bottom: 0.5rem;

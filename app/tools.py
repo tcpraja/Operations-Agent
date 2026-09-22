@@ -1,4 +1,97 @@
+import ast
+import logging
+import math
+import operator
+
 from agents import function_tool
+
+
+logger = logging.getLogger(__name__)
+
+
+# =========================================================
+# SAFE ARITHMETIC / ENGINEERING CALCULATOR
+# =========================================================
+
+_ALLOWED_BINARY_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+
+_ALLOWED_UNARY_OPERATORS = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+_ALLOWED_FUNCTIONS = {
+    "sqrt": math.sqrt,
+    "log": math.log,
+    "log10": math.log10,
+    "exp": math.exp,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "abs": abs,
+    "round": round,
+}
+
+_ALLOWED_CONSTANTS = {
+    "pi": math.pi,
+    "e": math.e,
+}
+
+
+def safe_calculate(expression: str) -> float:
+    """
+    Evaluate a simple arithmetic/engineering expression
+    (numbers, + - * / // % **, parentheses, and a small
+    whitelist of math functions/constants) without using
+    Python's eval, so it can never execute arbitrary code.
+    """
+
+    tree = ast.parse(expression, mode="eval")
+
+    def evaluate(node):
+
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)):
+                return node.value
+            raise ValueError("Only numeric constants are allowed.")
+
+        if isinstance(node, ast.BinOp):
+            operator_fn = _ALLOWED_BINARY_OPERATORS.get(type(node.op))
+            if operator_fn is None:
+                raise ValueError("Unsupported operator.")
+            return operator_fn(evaluate(node.left), evaluate(node.right))
+
+        if isinstance(node, ast.UnaryOp):
+            operator_fn = _ALLOWED_UNARY_OPERATORS.get(type(node.op))
+            if operator_fn is None:
+                raise ValueError("Unsupported operator.")
+            return operator_fn(evaluate(node.operand))
+
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name) or node.func.id not in _ALLOWED_FUNCTIONS:
+                raise ValueError("Unsupported function.")
+            args = [evaluate(arg) for arg in node.args]
+            return _ALLOWED_FUNCTIONS[node.func.id](*args)
+
+        if isinstance(node, ast.Name):
+            if node.id in _ALLOWED_CONSTANTS:
+                return _ALLOWED_CONSTANTS[node.id]
+            raise ValueError("Unsupported name.")
+
+        raise ValueError("Unsupported expression.")
+
+    return evaluate(tree)
 
 
 # =========================================================
@@ -108,3 +201,153 @@ def get_equipment_playbook(
     print(f"[TOOL RESULT] {result}\n")
 
     return result
+
+
+# =========================================================
+# WEB SEARCH
+# =========================================================
+
+def search_web(
+    query: str,
+    max_results: int = 5,
+) -> list[dict]:
+    """
+    Search the open web (DuckDuckGo, no API key required)
+    and return lightweight result summaries.
+
+    Failures (network issues, rate limiting, etc.) are
+    swallowed and reported as an empty result list so a
+    web outage never breaks incident analysis.
+    """
+
+    import time
+
+    from ddgs import DDGS
+
+    # A short per-round timeout bounds worst-case latency:
+    # the "auto" backend fans out across several search
+    # engines and some of them (Google, Brave, etc.)
+    # frequently rate-limit or hang, which without a tight
+    # timeout can push a single search past a minute. Try
+    # the fast single-engine backend first, and only fall
+    # back to "auto" (still capped) if that finds nothing.
+    # Backends are flaky (transient TLS/connection drops),
+    # so the whole two-backend pass is retried once after a
+    # short pause before giving up.
+    for pass_number in range(2):
+
+        for backend in (
+            "duckduckgo",
+            "auto",
+        ):
+
+            try:
+
+                raw_results = DDGS(
+                    timeout=4
+                ).text(
+                    query,
+                    backend=backend,
+                    max_results=max_results,
+                )
+
+                results = [
+                    {
+                        "title": item.get(
+                            "title", ""
+                        ),
+                        "url": item.get(
+                            "href", ""
+                        ),
+                        "snippet": item.get(
+                            "body", ""
+                        ),
+                    }
+                    for item in raw_results
+                ]
+
+                if results:
+                    return results
+
+            except Exception:
+
+                logger.warning(
+                    "web_search_backend_failed "
+                    "backend=%s query=%s",
+                    backend,
+                    query,
+                )
+
+                continue
+
+        if pass_number == 0:
+            time.sleep(1.5)
+
+    logger.warning(
+        "web_search_failed query=%s",
+        query,
+    )
+
+    return []
+
+
+def search_web_images(
+    query: str,
+    max_results: int = 4,
+) -> list[dict]:
+    """
+    Search the open web for real photos (DuckDuckGo image
+    search, no API key required). Returns lightweight
+    references (thumbnail, full image URL, source page) —
+    never the image bytes themselves, since these are
+    third-party copyrighted images.
+
+    Failures are swallowed and reported as an empty list so
+    a web outage never breaks the chat response.
+    """
+
+    from ddgs import DDGS
+
+    for backend in (
+        "duckduckgo",
+        "auto",
+    ):
+
+        try:
+
+            raw_results = DDGS(
+                timeout=6
+            ).images(
+                query,
+                backend=backend,
+                max_results=max_results,
+            )
+
+            return [
+                {
+                    "title": item.get("title", ""),
+                    "image_url": item.get("image", ""),
+                    "thumbnail_url": item.get("thumbnail", ""),
+                    "source_url": item.get("url", ""),
+                }
+                for item in raw_results
+                if item.get("image")
+            ]
+
+        except Exception:
+
+            logger.warning(
+                "web_image_search_backend_failed "
+                "backend=%s query=%s",
+                backend,
+                query,
+            )
+
+            continue
+
+    logger.warning(
+        "web_image_search_failed query=%s",
+        query,
+    )
+
+    return []

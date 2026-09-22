@@ -84,6 +84,23 @@ class Settings:
         "https://openrouter.ai/api/v1",
     )
 
+    AI_PROVIDER = os.getenv(
+        "AI_PROVIDER",
+        "openrouter",
+    ).lower()
+
+    AI_BASE_URL = (
+        "http://127.0.0.1:11434/v1"
+        if AI_PROVIDER == "ollama"
+        else OPENROUTER_BASE_URL
+    )
+
+    AI_API_KEY = (
+        "ollama"
+        if AI_PROVIDER == "ollama"
+        else OPENROUTER_API_KEY
+    )
+
     AI_MODEL = os.getenv(
         "AI_MODEL",
         "openrouter/free",
@@ -95,7 +112,7 @@ class Settings:
 
     AGENT_TIMEOUT_SECONDS = get_int(
         "AGENT_TIMEOUT_SECONDS",
-        30,
+        90,
     )
 
     MAX_AGENT_ATTEMPTS = get_int(
@@ -116,9 +133,9 @@ settings = Settings()
 # REQUIRED SETTINGS VALIDATION
 # =========================================================
 
-if not settings.OPENROUTER_API_KEY:
+if not settings.AI_API_KEY:
     raise RuntimeError(
-        "OPENROUTER_API_KEY is missing."
+        "AI provider API key is missing."
     )
 
 if not settings.APP_API_KEY:

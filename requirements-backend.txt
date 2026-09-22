@@ -5,3 +5,12 @@ pydantic
 python-dotenv
 httpx
 numpy
+matplotlib
+pypdf
+pytesseract
+Pillow
+ddgs
+openpyxl
+python-pptx
+python-docx
+reportlab

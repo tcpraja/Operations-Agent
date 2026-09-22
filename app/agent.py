@@ -26,8 +26,8 @@ set_tracing_disabled(True)
 # =========================================================
 
 openrouter_client = AsyncOpenAI(
-    api_key=settings.OPENROUTER_API_KEY,
-    base_url=settings.OPENROUTER_BASE_URL,
+    api_key=settings.AI_API_KEY,
+    base_url=settings.AI_BASE_URL,
 )
 
 
@@ -68,8 +68,25 @@ operations_agent = Agent(
         # structured responses
         temperature=0.1,
 
+        max_tokens=(
+            2048 if settings.AI_PROVIDER == "ollama" else None
+        ),
+
         # Keep tool execution simple and predictable
         parallel_tool_calls=False,
+
+        # This model spends a large amount of time on
+        # hidden reasoning tokens before producing the
+        # final answer. Capping effort meaningfully cuts
+        # response latency with only a modest quality
+        # trade-off.
+        reasoning={
+            "effort": (
+                "none"
+                if settings.AI_PROVIDER == "ollama"
+                else "low"
+            ),
+        },
     ),
 
     instructions="""
@@ -104,6 +121,11 @@ MANDATORY TOOL RULES
 
 6. Tool results must be treated as deterministic
    factual evidence for the final response.
+
+7. Web search results are already provided to you below,
+   for every incident, without you needing to request them.
+   You never need to ask for or decide whether to search
+   the web — it has already been done automatically.
 
 
 ====================================================
@@ -205,6 +227,25 @@ OUTPUT REQUIREMENTS
 25. confidence must be a numeric value between
     0 and 1.
 
+25a. equipment_specifications must summarize the
+    equipment's typical specifications only when the
+    equipment is identifiable and evidence supports it;
+    otherwise state that there is not enough information.
+
+25b. supplier_availability must only list manufacturers
+    or suppliers that are explicitly named in the
+    retrieved knowledge or web search results. If none
+    are named, return an empty list rather than
+    inventing supplier names.
+
+25c. spare_parts_cost_estimate must only report price or
+    cost figures that are explicitly present in the
+    retrieved spare-parts pricing web search results,
+    including the currency as reported. Never invent or
+    round a number that was not present in the source
+    text. If no pricing web result is relevant, state
+    plainly that no cost information was found.
+
 26. Keep the response concise, practical and suitable
     for manufacturing operations personnel.
 
@@ -248,6 +289,48 @@ ANTI-HALLUCINATION RULES
 
     "Electrical or control issue requiring verification."
 
+33a. Never default to a specific equipment type (such as
+    "cutter") just because it is the most common or only
+    equipment type covered by the knowledge base or
+    retrieved documents. If the incident text does not
+    clearly name or describe that equipment, treat any
+    retrieved knowledge about it as NOT applicable.
+
+33b. If the equipment type cannot be confidently
+    identified from the incident text, say so explicitly
+    in the summary and ask the user to confirm or specify
+    the equipment type, instead of silently assuming one.
+    In this case, equipment_specifications must state that
+    the equipment is not identified, and
+    supplier_availability must be an empty list.
+
+33c. More generally: if the incident description is too
+    ambiguous, incomplete, or unclear to produce a
+    trustworthy analysis (unknown equipment, unclear
+    symptom, contradictory information, or a description
+    too vague to act on), set needs_clarification to true
+    and set clarification_question to ONE specific,
+    focused question that would resolve the biggest
+    ambiguity (for example: "Which equipment is this —
+    a pump, cutter, compressor, or something else?" or
+    "What symptom are you seeing — noise, vibration,
+    leak, or a trip/alarm?"). Ask only one question at a
+    time; do not ask multiple questions at once.
+
+33d. When needs_clarification is true, still fill in the
+    rest of the fields with your best safe, generic,
+    non-equipment-specific guidance (e.g. keep the
+    equipment stopped and isolated until identified) —
+    never leave required fields empty — but keep
+    likely_causes and verification_checks generic rather
+    than guessing specifics.
+
+33e. When the incident is clear enough to analyze
+    confidently, set needs_clarification to false and
+    leave clarification_question as null. Do not ask a
+    clarification question just to gather optional detail
+    when the core equipment and symptom are already clear.
+
 34. Do not state that a shutdown, lockout, inspection,
     repair or escalation has already happened unless
     the user explicitly states that it happened.
@@ -286,11 +369,12 @@ RAG / KNOWLEDGE RULES
     - user-provided facts
     - deterministic tool results
     - retrieved manufacturing knowledge
+    - web search results
     - hypotheses requiring verification
 
 41. Do not invent equipment-specific causes that are not
-    supported by either the incident description or the
-    retrieved manufacturing knowledge.
+    supported by the incident description, the retrieved
+    manufacturing knowledge, or web search results.
 
 42. If retrieved knowledge conflicts with explicit
     incident information, do not silently override
@@ -298,9 +382,15 @@ RAG / KNOWLEDGE RULES
 
     Treat the conflict as requiring verification.
 
-43. If no relevant knowledge is retrieved, keep the
-    analysis generic rather than inventing
-    equipment-specific details.
+43. If neither the retrieved local knowledge nor the
+    provided web search results are relevant, keep the
+    analysis generic rather than inventing details.
+
+43a. Web search results are external reference evidence,
+    equivalent in status to retrieved local knowledge:
+    useful context, not proof that a specific failure
+    occurred at this site. Do not treat a web result as
+    site-specific fact.
 
 44. A possible cause listed in a retrieved document
     must still be presented as a possible cause,

@@ -130,8 +130,9 @@ def test_create_knowledge_chunks():
 
     assert len(chunks) >= 1
 
-    first_chunk = (
-        chunks[0]
+    first_chunk = next(
+        chunk for chunk in chunks
+        if chunk["source"] == "cutter_troubleshooting.txt"
     )
 
     assert (
@@ -170,8 +171,9 @@ def test_chunk_metadata():
 
     assert len(chunks) >= 1
 
-    first_chunk = (
-        chunks[0]
+    first_chunk = next(
+        chunk for chunk in chunks
+        if chunk["source"] == "cutter_troubleshooting.txt"
     )
 
     assert (
@@ -505,8 +507,9 @@ def test_build_or_load_returns_valid_chunks():
         >= 1
     )
 
-    first_chunk = (
-        cache[0]
+    first_chunk = next(
+        chunk for chunk in cache
+        if chunk["source"] == "cutter_troubleshooting.txt"
     )
 
     assert (

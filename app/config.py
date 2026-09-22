@@ -79,6 +79,10 @@ class Settings:
         "OPENROUTER_API_KEY"
     )
 
+    FIRECRAWL_API_KEY = os.getenv(
+        "FIRECRAWL_API_KEY"
+    )
+
     OPENROUTER_BASE_URL = os.getenv(
         "OPENROUTER_BASE_URL",
         "https://openrouter.ai/api/v1",

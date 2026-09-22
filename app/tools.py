@@ -3,8 +3,12 @@ import logging
 import math
 import operator
 import re
+from concurrent.futures import ThreadPoolExecutor
 
+import httpx
 from agents import function_tool
+
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -333,24 +337,124 @@ def _is_relevant_image(item: dict, terms: set[str]) -> bool:
     return any(term in haystack for term in terms)
 
 
+FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v1"
+
+
+def _firecrawl_scrape_og_image(url: str, headers: dict) -> str | None:
+    """Fetch one page's Open Graph image, the closest thing to a
+    canonical representative photo a page declares about itself."""
+
+    try:
+        response = httpx.post(
+            f"{FIRECRAWL_BASE_URL}/scrape",
+            headers=headers,
+            json={
+                "url": url,
+                "formats": ["markdown"],
+                "onlyMainContent": True,
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        metadata = response.json().get("data", {}).get("metadata", {})
+        return metadata.get("ogImage") or metadata.get("og:image")
+
+    except Exception:
+        return None
+
+
+def _search_web_images_firecrawl(
+    query: str,
+    max_results: int,
+) -> list[dict]:
+    """Use Firecrawl's web search (much higher relevance than
+    unofficial DuckDuckGo scraping for uncommon technical terms)
+    to find real source pages, then scrape each page's declared
+    Open Graph image as its representative photo."""
+
+    if not settings.FIRECRAWL_API_KEY:
+        return []
+
+    headers = {
+        "Authorization": f"Bearer {settings.FIRECRAWL_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = httpx.post(
+            f"{FIRECRAWL_BASE_URL}/search",
+            headers=headers,
+            json={
+                "query": query,
+                "limit": max_results * 2,
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        results = response.json().get("data", [])
+
+    except Exception:
+        logger.warning(
+            "firecrawl_search_failed query=%s",
+            query,
+        )
+        return []
+
+    if not results:
+        return []
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        og_images = list(
+            executor.map(
+                lambda result: _firecrawl_scrape_og_image(
+                    result.get("url", ""), headers
+                ),
+                results,
+            )
+        )
+
+    images = [
+        {
+            "title": result.get("title", ""),
+            "image_url": og_image,
+            "thumbnail_url": og_image,
+            "source_url": result.get("url", ""),
+        }
+        for result, og_image in zip(results, og_images)
+        if og_image
+    ]
+
+    return images[:max_results]
+
+
 def search_web_images(
     query: str,
     max_results: int = 4,
 ) -> list[dict]:
     """
-    Search the open web for real photos (DuckDuckGo image
-    search, no API key required). Returns lightweight
-    references (thumbnail, full image URL, source page) —
-    never the image bytes themselves, since these are
-    third-party copyrighted images.
+    Search the open web for real photos. Tries Firecrawl first
+    (when configured) since its search relevance is far better
+    for uncommon technical terms; falls back to unofficial
+    DuckDuckGo/Bing image scraping otherwise. Returns lightweight
+    references (thumbnail, full image URL, source page) — never
+    the image bytes themselves, since these are third-party
+    copyrighted images.
 
     Failures are swallowed and reported as an empty list so
     a web outage never breaks the chat response.
     """
 
-    from ddgs import DDGS
-
     terms = _significant_query_terms(query)
+
+    firecrawl_images = _search_web_images_firecrawl(query, max_results)
+    relevant_firecrawl_images = [
+        image for image in firecrawl_images
+        if _is_relevant_image(image, terms)
+    ]
+    if relevant_firecrawl_images:
+        return relevant_firecrawl_images
+
+    from ddgs import DDGS
 
     for backend in (
         "duckduckgo",

@@ -212,18 +212,71 @@ def get_equipment_playbook(
 # WEB SEARCH
 # =========================================================
 
+def _search_web_firecrawl(
+    query: str,
+    max_results: int,
+) -> list[dict]:
+    """Use Firecrawl's web search when configured — far more
+    relevant than unofficial DuckDuckGo scraping for specific
+    technical/commercial queries (spare parts, suppliers, model
+    numbers), and doesn't choke on special characters like a
+    literal '$' the way a scraped search box can."""
+
+    if not settings.FIRECRAWL_API_KEY:
+        return []
+
+    try:
+        response = httpx.post(
+            f"{FIRECRAWL_BASE_URL}/search",
+            headers={
+                "Authorization": f"Bearer {settings.FIRECRAWL_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "query": query,
+                "limit": max_results,
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        results = response.json().get("data", [])
+
+    except Exception:
+        logger.warning(
+            "firecrawl_text_search_failed query=%s",
+            query,
+        )
+        return []
+
+    return [
+        {
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "snippet": item.get("description", ""),
+        }
+        for item in results
+        if item.get("url")
+    ]
+
+
 def search_web(
     query: str,
     max_results: int = 5,
 ) -> list[dict]:
     """
-    Search the open web (DuckDuckGo, no API key required)
-    and return lightweight result summaries.
+    Search the open web and return lightweight result summaries.
+    Tries Firecrawl first (when configured), since its search
+    relevance is far better than unofficial DuckDuckGo scraping;
+    falls back to DuckDuckGo otherwise.
 
     Failures (network issues, rate limiting, etc.) are
     swallowed and reported as an empty result list so a
     web outage never breaks incident analysis.
     """
+
+    firecrawl_results = _search_web_firecrawl(query, max_results)
+    if firecrawl_results:
+        return firecrawl_results
 
     import time
 

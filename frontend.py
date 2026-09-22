@@ -202,11 +202,16 @@ st.markdown(
         position: sticky;
         top: 0;
         z-index: 999;
-        background-color: #0e1117;
+        background-color: #002E61;
     }
     div.st-key-sticky_header {
         padding-top: 0.5rem;
         padding-bottom: 0.5rem;
+        padding-left: 1rem;
+    }
+    div.st-key-sticky_header h1,
+    div.st-key-sticky_header p {
+        color: #FFFFFF;
     }
     </style>
     """,

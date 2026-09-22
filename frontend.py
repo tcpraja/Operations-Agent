@@ -398,7 +398,7 @@ def call_chat_api(message: str, history: list[dict], persist: bool = True):
                 "session_id": st.session_state.session_id if persist else None,
             },
             headers={"X-API-Key": APP_API_KEY},
-            timeout=120,
+            timeout=180,
         )
         response.raise_for_status()
         return response.json()
@@ -768,7 +768,7 @@ def call_upload_api(uploaded_file, instruction: str):
             files=files,
             data=data,
             headers={"X-API-Key": APP_API_KEY},
-            timeout=120,
+            timeout=180,
         )
         response.raise_for_status()
         return response.json()

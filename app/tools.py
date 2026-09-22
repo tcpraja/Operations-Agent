@@ -297,6 +297,8 @@ _IMAGE_QUERY_STOPWORDS = {
     "real", "actual", "photo", "photos", "photograph",
     "picture", "pictures", "image", "images",
     "industrial", "equipment", "plant", "vessel", "process",
+    "need", "want", "give", "show", "find", "get", "some",
+    "any", "please", "web", "internet", "one", "me",
 }
 
 
@@ -321,7 +323,10 @@ def _is_relevant_image(item: dict, terms: set[str]) -> bool:
     showing a clearly wrong photo is worse than showing none."""
 
     if not terms:
-        return True
+        # A query with no real content word (everything filtered
+        # out as generic filler) can't be judged for relevance —
+        # treat it as unsearchable rather than accepting anything.
+        return False
 
     haystack = f"{item.get('title', '')} {item.get('source_url', '')}".lower()
 
@@ -349,6 +354,7 @@ def search_web_images(
 
     for backend in (
         "duckduckgo",
+        "bing",
         "auto",
     ):
 

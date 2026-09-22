@@ -214,8 +214,10 @@ st.markdown(
         justify-content: flex-end;
     }
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
-    div[data-testid="stChatMessageContent"] {
-        text-align: right;
+    div[data-testid="stChatMessageContent"],
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
+    div[data-testid="stChatMessageContent"] * {
+        text-align: right !important;
     }
     </style>
     """,

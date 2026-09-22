@@ -1133,10 +1133,14 @@ async def _chat_core(
             )
 
     if decision.action == "web_image":
-        equipment_term = equipment_search_term(latest)
-        if CUTTER_PATTERN.search(latest):
+        # A follow-up like "need web photo" carries no equipment
+        # word of its own — fall back to the recent conversation
+        # context (already validated above), not just this message,
+        # or the search loses the equipment entirely.
+        equipment_term = equipment_search_term(media_context)
+        if CUTTER_PATTERN.search(media_context):
             search_terms = "pellet cutter pelletizer industrial equipment"
-        elif PUMP_PATTERN.search(latest):
+        elif PUMP_PATTERN.search(media_context):
             search_terms = "polymer gear pump industrial equipment"
         elif decision.web_image_query and decision.web_image_query.strip():
             search_terms = decision.web_image_query.strip()

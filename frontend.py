@@ -207,6 +207,16 @@ st.markdown(
     div.st-key-sticky_header p {
         color: #FFFFFF;
     }
+    /* Right-align the user's own messages (avatar + bubble),
+       like a normal chat app; assistant replies stay left. */
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {
+        flex-direction: row-reverse;
+        justify-content: flex-end;
+    }
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
+    div[data-testid="stChatMessageContent"] {
+        text-align: right;
+    }
     </style>
     """,
     unsafe_allow_html=True,

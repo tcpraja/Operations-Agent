@@ -2,6 +2,7 @@ import ast
 import logging
 import math
 import operator
+import re
 
 from agents import function_tool
 
@@ -291,6 +292,42 @@ def search_web(
     return []
 
 
+_IMAGE_QUERY_STOPWORDS = {
+    "a", "an", "the", "of", "for", "and", "or",
+    "real", "actual", "photo", "photos", "photograph",
+    "picture", "pictures", "image", "images",
+    "industrial", "equipment", "plant", "vessel", "process",
+}
+
+
+def _significant_query_terms(query: str) -> set[str]:
+    """Content words from a search query, ignoring generic
+    filler like 'industrial equipment' that every query shares
+    and so can't be used to judge relevance."""
+
+    words = re.findall(r"[a-z0-9]+", query.lower())
+    return {
+        word for word in words
+        if len(word) > 2 and word not in _IMAGE_QUERY_STOPWORDS
+    }
+
+
+def _is_relevant_image(item: dict, terms: set[str]) -> bool:
+    """Reject results whose title/source page never mentions any
+    content word from the query. Unofficial image-search scraping
+    sometimes returns confidently wrong results for uncommon
+    technical terms (e.g. an acronym); a title/URL that shares
+    nothing with the query is a strong signal of that, and
+    showing a clearly wrong photo is worse than showing none."""
+
+    if not terms:
+        return True
+
+    haystack = f"{item.get('title', '')} {item.get('source_url', '')}".lower()
+
+    return any(term in haystack for term in terms)
+
+
 def search_web_images(
     query: str,
     max_results: int = 4,
@@ -308,6 +345,8 @@ def search_web_images(
 
     from ddgs import DDGS
 
+    terms = _significant_query_terms(query)
+
     for backend in (
         "duckduckgo",
         "auto",
@@ -320,10 +359,10 @@ def search_web_images(
             ).images(
                 query,
                 backend=backend,
-                max_results=max_results,
+                max_results=max_results * 3,
             )
 
-            return [
+            candidates = [
                 {
                     "title": item.get("title", ""),
                     "image_url": item.get("image", ""),
@@ -334,6 +373,21 @@ def search_web_images(
                 if item.get("image")
             ]
 
+            relevant = [
+                candidate for candidate in candidates
+                if _is_relevant_image(candidate, terms)
+            ]
+
+            if relevant:
+                return relevant[:max_results]
+
+            logger.warning(
+                "web_image_search_no_relevant_results "
+                "backend=%s query=%s",
+                backend,
+                query,
+            )
+
         except Exception:
 
             logger.warning(
@@ -343,7 +397,7 @@ def search_web_images(
                 query,
             )
 
-            continue
+        continue
 
     logger.warning(
         "web_image_search_failed query=%s",
